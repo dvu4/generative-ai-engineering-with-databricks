@@ -202,12 +202,34 @@ from langchain.agents.agent import AgentExecutor
 
 # COMMAND ----------
 
-from langchain.agents import create_tool_calling_agent
-from langchain.agents.agent import AgentExecutor
+from langchain.agents import AgentExecutor, create_tool_calling_agent
+from langchain.prompts import PromptTemplate
 from langchain_core.tools import tool
-from langchain_core.messages import HumanMessage
-from langchain_core.runnables import RunnableConfig
-from langchain_community.chat_models import ChatAnthropic
+from databricks_langchain import ChatDatabricks
+
+template = """Answer the following questions as best you can. You have access to the following tools:
+
+'{{tools}}'
+
+Use the following format:
+
+Question: the input question you must answer
+Thought: you should always think about what to do
+Action: the action to take, should be one of ['{{tool_names}}']
+Action Input: the input to the action
+Observation: the result of the action
+... (this Thought/Action/Action Input/Observation can repeat N times)
+Thought: I now know the final answer
+Final Answer: the final answer to the original input question
+
+Begin!
+
+Question: {input}'
+Thought:{agent_scratchpad}"""
+
+prompt= PromptTemplate.from_template(template)
+llm_llama = ChatDatabricks(endpoint="databricks-meta-llama-3-3-70b-instruct", max_tokens = 2500)
+
 
 # Define the tool using the @tool decorator
 @tool
@@ -215,25 +237,12 @@ def get_weather(city: str) -> str:
     """Get weather for a given city."""
     return f"It's always sunny in {city}!"
 
-# Initialize the model
-model = ChatAnthropic(model="claude-sonnet-4-5-20250929")
+tools=[get_weather]
 
-# Create the agent
-agent = create_tool_calling_agent(
-    llm=model,
-    tools=[get_weather],
-    system_prompt="You are a helpful assistant",
-)
-
-# Wrap the agent in an executor
-agent_executor = AgentExecutor(agent=agent, tools=[get_weather])
-
-# Run the agent
-response = agent_executor.invoke(
-    {"input": "what is the weather in Chicago today"}
-)
-
-print(response)
+agent = create_tool_calling_agent(llm_llama, tools, prompt)
+weather_agent  = AgentExecutor(agent=agent, tools=tools, verbose=True, handle_parsing_errors=True, max_iterations=5)
+agent_response = weather_agent.invoke({"input": "what is the weather in Chicago today"})
+print(agent_response["output"])
 
 # COMMAND ----------
 
