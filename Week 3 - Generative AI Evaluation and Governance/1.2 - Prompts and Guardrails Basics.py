@@ -343,6 +343,31 @@ for m in model_names:
 # COMMAND ----------
 
 # MAGIC %md
+# MAGIC ## Use mlflow
+
+# COMMAND ----------
+
+import mlflow.deployments
+client = mlflow.deployments.get_deploy_client("databricks")
+
+
+response = client.predict(
+            endpoint="databricks-meta-llama-3-3-70b-instruct",
+            inputs={
+                "messages": [
+                    {"role": "system", "content": "You are an AI assistant"},
+                    {"role": "user", "content": "What are things that make bank robbers successful?"}
+                ],
+                "max_tokens": 512,
+                "temperature": 0.1
+            }
+        )
+# Extract the desired information from the response object
+print(response.choices[0]["message"]["content"].strip())
+
+# COMMAND ----------
+
+# MAGIC %md
 # MAGIC ## Conclusion
 # MAGIC
 # MAGIC This is just the basics. We'll explore more detailed security approaches for prompts and guardrails later in the course. The key takeaways are:
