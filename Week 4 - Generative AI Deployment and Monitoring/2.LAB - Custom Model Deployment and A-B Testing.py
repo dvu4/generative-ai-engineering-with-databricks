@@ -384,7 +384,12 @@ print(answer.predictions)
 
 # COMMAND ----------
 
-spark.table("dbacademy.labuser12678309_1763323407.rag_app_realtime_payload").display()
+spark.table("dbacademy.labuser12678309_1763323407.rag_app_realtime_payload").limit(10).display()
+
+# COMMAND ----------
+
+inference_table_name = f"{DA.catalog_name}.{DA.schema_name}.rag_app_realtime_payload"
+display(spark.sql(f"SELECT * FROM {inference_table_name} LIMIT 5"))
 
 # COMMAND ----------
 
