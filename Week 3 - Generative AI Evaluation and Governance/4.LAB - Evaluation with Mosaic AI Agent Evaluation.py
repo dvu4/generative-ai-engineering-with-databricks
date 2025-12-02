@@ -230,6 +230,10 @@ displayHTML('<img src="/files/tables/agent_ai_customized_evaluation_metrics.png"
 
 # COMMAND ----------
 
+displayHTML('<img src="https://github.com/dvu4/generative-ai-engineering-with-databricks/raw/main/Week%203%20-%20Generative%20AI%20Evaluation%20and%20Governance/agent_ai_customized_evaluation_metrics.png" width="1100"/>')
+
+# COMMAND ----------
+
 # MAGIC %md
 # MAGIC ## OPTIONAL - Collect Human Feedback via Databricks Review App
 # MAGIC
