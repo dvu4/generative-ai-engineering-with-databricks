@@ -13,17 +13,19 @@
 
 # MAGIC %md
 # MAGIC
-# MAGIC # Evaluation with Mosaic AI Agent Evaluation
+# MAGIC # LAB- Evaluation with Mosaic AI Agent Evaluation
 # MAGIC
-# MAGIC In previous demonstrations, we utilized `mlflow` for evaluation purposes. Mosaic AI Agent Evaluation builds upon MLflow, offering additional features and enhancements. It enables the definition of custom evaluation metrics, facilitates straightforward model deployment, and provides an easy-to-use **Review App**.
+# MAGIC In this lab, you will have the opportunity to evaluate a RAG chain model **using Mosaic AI Agent Evaluation Framework.**
 # MAGIC
-# MAGIC **Learning Objectives:**
+# MAGIC **Lab Outline:**
 # MAGIC
-# MAGIC *By the end of this demo, you will be able to:*
+# MAGIC *In this lab, you will complete the following tasks:*
 # MAGIC
-# MAGIC - Load a model from the model registry and use it to evaluate an evaluation dataset.
-# MAGIC - Define custom evaluation metrics.
-# MAGIC - Deploy the model along with the Review App to gather human feedback.
+# MAGIC - **Task 1**: Define a custom Gen AI evaluation metric.
+# MAGIC
+# MAGIC - **Task 2**: Conduct an evaluation test using the Agent Evaluation Framework.
+# MAGIC
+# MAGIC - **Task 3**: Analyze the evaluation results through the user interface.
 
 # COMMAND ----------
 
@@ -59,7 +61,6 @@
 # MAGIC
 # MAGIC * To run this notebook, you need to use one of the following Databricks runtime(s): **15.4.x-cpu-ml-scala2.12**
 # MAGIC
-# MAGIC **🚨 Pre-requisite Notice:** This notebook requires **[00 - Build-Model]($../00-Build-Model/00-Build-Model)** to create a model that will be used for this demo. **In Databricks provided lab environment this will be run before the class, which means you don't need to run it manually**.
 
 # COMMAND ----------
 
@@ -71,13 +72,16 @@
 
 # COMMAND ----------
 
-# MAGIC %pip install -U -qq databricks-agents databricks-sdk databricks-vectorsearch langchain==0.3.7 databricks-langchain mlflow-skinny[databricks]==3.4.0
-# MAGIC dbutils.library.restartPython()
+# MAGIC %pip install -U -qq databricks-agents databricks-sdk databricks-vectorsearch databricks-langchain langchain==0.3.7 langchain-community==0.3.7 mlflow>=3.0 databricks-feature-engineering --upgrade
+
+# COMMAND ----------
+
+dbutils.library.restartPython()
 
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC Before starting the demo, run the provided classroom setup script. This script will define configuration variables necessary for the demo. Execute the following cell:
+# MAGIC Before starting the lab, run the provided classroom setup script. This script will define configuration variables necessary for the lab. Execute the following cell:
 
 # COMMAND ----------
 
@@ -88,7 +92,7 @@
 # MAGIC %md
 # MAGIC **Other Conventions:**
 # MAGIC
-# MAGIC Throughout this demo, we'll refer to the object `DA`. This object, provided by Databricks Academy, contains variables such as your username, catalog name, schema name, working directory, and dataset locations. Run the code block below to view these details:
+# MAGIC Throughout this lab, we'll refer to the object `DA`. This object, provided by Databricks Academy, contains variables such as your username, catalog name, schema name, working directory, and dataset locations. Run the code block below to view these details:
 
 # COMMAND ----------
 
@@ -101,28 +105,30 @@ print(f"Dataset Location:  {DA.paths.datasets}")
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## Demo Overview
+# MAGIC ## Lab Overview
 # MAGIC
-# MAGIC In this demo, we will begin by reviewing **the dataset** that will be used for evaluation. Next, we will **load a RAG chain** model from the model registry and utilize it for evaluation purposes. To illustrate custom evaluation, we will define a custom metric and incorporate it into the evaluation workflow. Upon completing the evaluation, we will **deploy the model** and demonstrate how to use the integrated "Review App" to gather **human feedback**.
+# MAGIC
 # MAGIC
 
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## Prepare Evaluation Dataset
+# MAGIC ## Evaluation Dataset
 # MAGIC
-# MAGIC This dataset includes sample queries and their corresponding expected responses. The expected responses are generated using synthetic data. In a real-world project, these responses would be crafted by experts.
+# MAGIC In this lab, you will work with the same dataset utilized in the demos. This dataset contains sample queries along with their corresponding expected responses, which are generated using synthetic data.
 
 # COMMAND ----------
 
-display(DA.eval_dataset)
+display(DA.eval_df)
 
 # COMMAND ----------
 
 # MAGIC %md
 # MAGIC ## Load the Model
 # MAGIC
-# MAGIC A RAG chain has been created and registered for us. If you're interested in the code, you can explore the `00 - Build Model` folder. Please note that building RAG chains is beyond the scope of this course. For more information on these topics, you can refer to the related course, **"Generative AI Solution Development"** available on the Databricks Academy.
+# MAGIC A RAG chain has been created and registered for use in this lab. The model details are provided below.
+# MAGIC
+# MAGIC **📌 Note:** If you are using your own workspace to run this lab, you must manually execute **`00 - Build Model / 00-Build Model`**.
 
 # COMMAND ----------
 
@@ -131,24 +137,26 @@ import mlflow
 catalog_name = "genai_shared_catalog_03"
 schema_name = f"ws_{spark.conf.get('spark.databricks.clusterUsageTags.clusterOwnerOrgId')}"
 
-model_name= f"{catalog_name}.{schema_name}.rag_app"
+mlflow.set_registry_uri("databricks-uc")
+
 model_uri = f"models:/{catalog_name}.{schema_name}.rag_app/1"
-rag_model = mlflow.langchain.load_model(model_uri)
+model_name = f"{catalog_name}.{schema_name}.rag_app"
 
 # COMMAND ----------
 
+model_name
+
+# COMMAND ----------
+
+rag_model = mlflow.langchain.load_model(model_uri)
 rag_model
 
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## Model Evaluation
-
-# COMMAND ----------
-
-# MAGIC %md
-# MAGIC ### Define Custom Metrics
-# MAGIC Although the Agents Evaluation framework automatically calculates common evaluation metrics, there are instances where we may need to assess the model using custom metrics. In this section, we will define a custom metric to evaluate whether the **retrieval model** generates responses containing personally identifiable information (PII).
+# MAGIC ## Task 1 - Define A Custom Metric
+# MAGIC
+# MAGIC For this task, define a custom metric to evaluate whether the generated **"ANSWER"** from the RAG chain is easily readable by a non-expert user.
 
 # COMMAND ----------
 
@@ -161,55 +169,43 @@ rag_model
 
 from mlflow.metrics.genai import make_genai_metric_from_prompt
 
-# Define a custom assessment to detect PII in the retrieved chunks. 
-has_pii_prompt = "Your task is to determine whether the retrieved content has any PII information. This was the content: '{retrieved_context}'"
+## Prompt for LLM as judge to determine if the generated response is easily readable by non-academic or expert readers
+eval_prompt = "Your task is to determine whether the generated response easily readable by non-academic or expert readers. This was the content: '{retrieved_context}'"
 
-has_pii = make_genai_metric_from_prompt(
-    name="has_pii",
-    judge_prompt=has_pii_prompt,
-    model="endpoints:/databricks-meta-llama-3-3-70b-instruct",
-    metric_metadata={"assessment_type": "RETRIEVAL"},
-    greater_is_better = False
+## Use Llama-3 as LLM
+llm="endpoints:/databricks-meta-llama-3-3-70b-instruct"
+
+## Define the metric
+is_readable = make_genai_metric_from_prompt(
+    name="is_readable",
+    judge_prompt=eval_prompt,
+    model=llm,
+    metric_metadata={"assessment_type": "ANSWER"},
+    greater_is_better=True
 )
 
 # COMMAND ----------
 
-has_pii.greater_is_better
-
-# COMMAND ----------
-
-# DBTITLE 1,Evaluation Metric
-# Evaluation Metric
-has_pii
+# Customized Evaluation Metric
+is_readable
 
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ### Run Evaluation Test
+# MAGIC ##Task 2 - Run Evaluation Test
 # MAGIC
-# MAGIC Please note that in the code below, we are logging the evaluation process using MLflow to enable viewing the results through the MLflow UI.
+# MAGIC Next, run an evaluation using the custom metric you defined. Ensure that you select **Mosaic AI Agent Evaluation** as the evaluation type.
+# MAGIC
 
 # COMMAND ----------
 
-with mlflow.start_run(run_name="rag_eval_with_agent_evaluation"):
+with mlflow.start_run(run_name="lab_04_agent_evaluation"):
     eval_results = mlflow.evaluate(
-        data = DA.eval_df,
-        model = model_uri,
-        model_type = "databricks-agent",
-        extra_metrics=[has_pii]
+        data=DA.eval_df,
+        model=model_uri,
+        model_type="databricks-agent",
+        extra_metrics=[is_readable]
     )
-
-# COMMAND ----------
-
-# MAGIC %md
-# MAGIC ### Review Evaluation Results
-# MAGIC
-# MAGIC We have two options for reviewing the evaluation results. The first option is to examine the metrics and tables directly using the results object. The second option is to review the results through the user interface (UI).
-
-# COMMAND ----------
-
-# MAGIC %md
-# MAGIC #### Review Review Metrics
 
 # COMMAND ----------
 
@@ -218,22 +214,24 @@ display(eval_results.metrics)
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ### Review Results via the UI
+# MAGIC ## Task 3 - Review Evaluation Results
 # MAGIC
-# MAGIC To view the results in the UI, follow these steps:
+# MAGIC Review the evaluation results in the **Experiments** section. Examine the following information regarding this evaluation:
 # MAGIC
-# MAGIC - Click on the **"View evaluation results"** tab displayed at the **Run Evaluation Test** section code block's output for a simpler method.
+# MAGIC - Token usage
 # MAGIC
-# MAGIC - Alternatively, you can navigate to "Experiments" in the left panel and locate the experiment registered with the title of this notebook.
+# MAGIC - Model metrics
 # MAGIC
-# MAGIC - Click on the Run Name and View the overall metrics in the **Model Metrics** tab.
-# MAGIC
-# MAGIC - Examine detailed results for each assessment in the **Evaluation results Preview** tab.
+# MAGIC - Results of the custom metric defined earlier ("readability")
+
+# COMMAND ----------
+
+displayHTML('<img src="/files/tables/agent_ai_customized_evaluation_metrics.png" width="1100"/>')
 
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## Collect Human Feedback via Databricks Review App
+# MAGIC ## OPTIONAL - Collect Human Feedback via Databricks Review App
 # MAGIC
 # MAGIC The Databricks Review App stages the LLM in an environment where expert stakeholders can engage with it—allowing for conversations, questions, and more. This setup enables the collection of valuable feedback on your application, ensuring the quality and safety of its responses.
 # MAGIC
@@ -283,33 +281,6 @@ print(f"Review App URL  : {deployment_info.review_app_url}")
 
 # COMMAND ----------
 
-# MAGIC %md
-# MAGIC ## Set Permissions for Other Users
-# MAGIC
-# MAGIC **🚨 Note:** To allow other users for querying and reviewing the app, you need to manually set permissions. To do that;
-# MAGIC * Go to **Serving** page and select the deployed endpoint.
-# MAGIC
-# MAGIC * Select **Permissions**.
-# MAGIC
-# MAGIC * Set **Can Query** to "All workspace users".
-
-# COMMAND ----------
-
-# MAGIC %md
-# MAGIC
-# MAGIC ## 🚨 Mandatory Step: Clean-up
-# MAGIC
-# MAGIC To ensure a smooth workflow, **you must delete the deployed endpoint** before ending the session. This allows other users to deploy a new endpoint without conflicts.  
-# MAGIC
-# MAGIC Run the cell below **before moving forward** to clean up the deployed resources.  
-# MAGIC
-# MAGIC **⚠️ Important:**
-# MAGIC - **This step is required** and should be run **before leaving the session**.
-# MAGIC - **Instructors should ensure this step is completed** to prevent resource conflicts.
-# MAGIC
-
-# COMMAND ----------
-
 from mlflow.tracking import MlflowClient
 client = MlflowClient()
 try:
@@ -333,10 +304,9 @@ except:
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC
 # MAGIC ## Conclusion
 # MAGIC
-# MAGIC In this demo, we began by defining a custom metric to be used as an additional metric within the Agent Evaluation Framework. Next, we conducted an evaluation run and reviewed the results using both the API and the user interface. In the final step, we deployed the model through Model Serving and demonstrated how the Review App can be utilized to collect human feedback.
+# MAGIC In this lab, you evaluated a RAG chain using the Mosaic AI Evaluation Framework library. You began by loading the dataset and RAG model. Then, you defined a custom metric and initiated the evaluation process. Finally, you reviewed the results through the user interface.
 
 # COMMAND ----------
 
